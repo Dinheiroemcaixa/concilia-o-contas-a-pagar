@@ -6,7 +6,6 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Salva tokens OAuth no Supabase e retorna um sessionId pequeno para o cookie
 export async function salvarTokensSessao(tokens: {
   access_token: string
   refresh_token?: string
@@ -17,9 +16,54 @@ export async function salvarTokensSessao(tokens: {
     ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
     : null
 
-  const { error } = await supabase.from('sessoes').upsert({
+  const { error } = await supabase.from('sessoes').insert({
     id,
     access_token:  tokens.access_token,
     refresh_token: tokens.refresh_token ?? null,
     token_expiry:  expiry,
-    atualizado_em: new Date().to
+    atualizado_em: new Date().toISOString()
+  })
+
+  if (error) throw new Error('Erro ao salvar sessao: ' + error.message)
+  return id
+}
+
+export async function buscarTokensSessao(sessionId: string) {
+  const { data, error } = await supabase
+    .from('sessoes')
+    .select('access_token, refresh_token, token_expiry')
+    .eq('id', sessionId)
+    .single()
+
+  if (error || !data) return null
+  return data
+}
+
+export async function removerSessao(sessionId: string) {
+  await supabase.from('sessoes').delete().eq('id', sessionId)
+}
+
+export async function salvarImportacao(dados: {
+  empresa: string
+  total_contas: number
+  total_valor: number
+  ok: number
+  erros: number
+  detalhes: object[]
+}) {
+  const { error } = await supabase.from('importacoes').insert({
+    ...dados,
+    criado_em: new Date().toISOString()
+  })
+  if (error) console.error('Erro ao salvar no Supabase:', error)
+}
+
+export async function buscarHistorico() {
+  const { data, error } = await supabase
+    .from('importacoes')
+    .select('*')
+    .order('criado_em', { ascending: false })
+    .limit(50)
+  if (error) return []
+  return data
+}
