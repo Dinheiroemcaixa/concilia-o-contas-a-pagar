@@ -13,7 +13,9 @@ export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET || 'senha-super-secreta-troque-isso-32chars!!',
   cookieName: 'ca_session',
   cookieOptions: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
+    httpOnly: true,
+    sameSite: 'lax',
     maxAge: 60 * 60 * 8
   }
 }

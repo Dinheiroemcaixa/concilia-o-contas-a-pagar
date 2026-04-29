@@ -232,9 +232,9 @@ export function AppDatacar() {
 
   async function carregarOpcoes() {
     try {
-      const rc = await fetch('/api/categorias')
+      const rc = await fetch('/api/categorias', { credentials: 'include' })
       const cats = await rc.json()
-      const rf = await fetch('/api/contas-financeiras')
+      const rf = await fetch('/api/contas-financeiras', { credentials: 'include' })
       const cfs = await rf.json()
       if (Array.isArray(cats)) { setCategorias(cats) }
       if (Array.isArray(cfs)) { setContasFin(cfs) }
@@ -243,17 +243,17 @@ export function AppDatacar() {
 
   async function carregarHistorico() {
     try {
-      const res = await fetch('/api/historico')
+      const res = await fetch('/api/historico', { credentials: 'include' })
       const data = await res.json()
       if (Array.isArray(data)) { setHistorico(data) }
     } catch (_) {}
   }
 
   useEffect(function () {
-    fetch('/api/auth/me-app').then(function (r) { return r.json() }).then(function (d) {
+    fetch('/api/auth/me-app', { credentials: 'include' }).then(function (r) { return r.json() }).then(function (d) {
       if (d.logado) { setLogado(true); setUsuarioAtual(d.usuario); setNomeAtual(d.nome || d.usuario) }
     }).catch(function () {})
-    fetch('/api/me').then(function (r) { return r.json() }).then(function (d) {
+    fetch('/api/me', { credentials: 'include' }).then(function (r) { return r.json() }).then(function (d) {
       setAutenticado(d.autenticado)
       if (d.autenticado) { carregarOpcoes() }
     }).catch(function () {})
@@ -280,7 +280,7 @@ export function AppDatacar() {
     const form = new FormData()
     form.append('arquivo', file)
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
+      const res = await fetch('/api/upload', { method: 'POST', body: form, credentials: 'include' })
       const data = await res.json()
       if (data.erro) { setUploadMsg({ tipo: 'erro', txt: data.erro }); return }
       setEmpresa(data.empresa); setContas(data.contas)
@@ -316,6 +316,7 @@ export function AppDatacar() {
       const res = await fetch('/api/lancar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ contas: payload, categoria_id: catId, conta_financeira_id: contaFinId }),
       })
       const data = await res.json()
@@ -326,7 +327,7 @@ export function AppDatacar() {
   }
 
   async function handleLogout() {
-    await fetch('/api/auth/logout-app', { method: 'POST' }).catch(function () {})
+    await fetch('/api/auth/logout-app', { method: 'POST', credentials: 'include' }).catch(function () {})
     setLogado(false); setUsuarioAtual(''); setNomeAtual('')
   }
 
