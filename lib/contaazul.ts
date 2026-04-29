@@ -1,10 +1,10 @@
-// Configurações e helpers da API ContaAzul
+// Configuracoes e helpers da API ContaAzul
 
 export const CA_CLIENT_ID     = process.env.CONTAAZUL_CLIENT_ID!
 export const CA_CLIENT_SECRET = process.env.CONTAAZUL_CLIENT_SECRET!
 export const CA_REDIRECT_URI  = process.env.CONTAAZUL_REDIRECT_URI!
 
-export const CA_AUTH_URL  = 'https://auth.contaazul.com/oauth2/authorize'
+export const CA_AUTH_URL  = 'https://auth.contaazul.com/login'
 export const CA_TOKEN_URL = 'https://auth.contaazul.com/oauth2/token'
 export const CA_API_BASE  = 'https://api-v2.contaazul.com'
 export const CA_SCOPES    = 'openid profile aws.cognito.signin.user.admin'
@@ -59,6 +59,6 @@ export async function apiPost(accessToken: string, path: string, body: object) {
     body: JSON.stringify(body)
   })
   let data: any
-  try { data = await res.json() } catch { data = { raw: await res.text() } }
+  try { data = await res.json() } catch { data = null }
   return { data, status: res.status }
 }
