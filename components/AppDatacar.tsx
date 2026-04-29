@@ -170,7 +170,7 @@ function TelaAuth(props: TelaAuthProps) {
       <div className="dc-lw">
         <div className="dc-lc">
           <div className="dc-ll"><div className="dc-li">{iconFile}</div></div>
-          <div className="dc-lt">Datacar - ContaAzul</div>
+          <div className="dc-lt">Conciliação Contas a Pagar</div>
           {tela === 'login' && (
             <div>
               <div className="dc-ls">Faca login para continuar</div>
@@ -354,7 +354,7 @@ export function AppDatacar() {
         <div className="dc-logo">
           <div className="dc-logo-icon">{iconFileSm}</div>
           <div>
-            <div className="dc-logo-name">Datacar - ContaAzul</div>
+            <div className="dc-logo-name">Conciliação Contas a Pagar</div>
             <div className="dc-logo-sub">Importacao de Contas a Pagar</div>
           </div>
         </div>

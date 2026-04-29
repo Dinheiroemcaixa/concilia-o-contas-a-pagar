@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (error) {
-    return NextResponse.redirect(new URL(`/?erro=${encodeURIComponent('Erro na autenticação: ' + error)}`, req.url))
+    return NextResponse.redirect(new URL(`/?erro=${encodeURIComponent('Erro na autenticacao: ' + error)}`, req.url))
   }
 
   const session = await getSession()
@@ -22,15 +22,18 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await trocarCodigoPorToken(code!)
 
-    // Salva tokens grandes no Supabase, guarda só o ID pequeno no cookie
     const sessionId = await salvarTokensSessao({
       access_token:  tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_in:    tokens.expires_in
     })
 
-    session.sessionId   = sessionId
-    session.oauthState  = undefined
+    session.sessionId  = sessionId
+    session.oauthState = undefined
     await session.save()
 
-    return NextR
+    return NextResponse.redirect(new URL('/', req.url))
+  } catch (e: any) {
+    return NextResponse.redirect(new URL(`/?erro=${encodeURIComponent(e.message)}`, req.url))
+  }
+}
