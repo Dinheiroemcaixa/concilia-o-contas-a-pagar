@@ -2,7 +2,7 @@ import { getIronSession, SessionOptions } from 'iron-session'
 import { cookies } from 'next/headers'
 
 export interface SessionData {
-  sessionId?:   string   // ID da sessão guardada no Supabase (tokens ficam lá)
+  sessionId?:   string
   oauthState?:  string
   empresaNome?: string
   appUsuario?:  string
@@ -11,12 +11,13 @@ export interface SessionData {
 
 export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET || 'senha-super-secreta-troque-isso-32chars!!',
-  cookieName: 'datacar_ca_session',
+  cookieName: 'ca_session',
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 8 // 8 horas
+    maxAge: 60 * 60 * 8
   }
 }
 
 export async function getSession() {
-  return getIronSession<SessionData>(await cookies(), sessionOptio
+  return getIronSession<SessionData>(await cookies(), sessionOptions)
+}
