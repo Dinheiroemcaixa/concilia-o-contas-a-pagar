@@ -10,28 +10,36 @@ export async function GET() {
 
   const token = tokens.access_token
   const base = 'https://api-v2.contaazul.com'
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-
-  const endpoints = [
-    '/v1/companies',
-    '/v1/tenants',
-    '/v1/accounts',
-    '/financial/v1/companies',
-    '/v1/users/me',
-    '/v1/me',
-  ]
+  const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
   const resultados: Record<string, any> = {}
-  for (const ep of endpoints) {
-    try {
-      const res = await fetch(`${base}${ep}`, { headers })
-      let body: any
-      try { body = await res.json() } catch { body = await res.text() }
-      resultados[ep] = { status: res.status, body }
-    } catch (e: any) {
-      resultados[ep] = { erro: e.message }
-    }
+
+  // Testa endpoints que ja sabemos que funcionam
+  const funcionam = [
+    '/financial/v1/categories?type=EXPENSE',
+    '/financial/v1/bank-accounts',
+    '/financial/v1/payable?page=0&size=1',
+  ]
+  for (const ep of funcionam) {
+    const res = await fetch(`${base}${ep}`, { headers: h })
+    let body: any
+    try { body = await res.json() } catch { body = await res.text() }
+    resultados[ep] = { status: res.status, body: JSON.stringify(body).slice(0, 300) }
   }
+
+  // Testa com header de empresa (diferentes formatos que a API pode aceitar)
+  const empresaHeaders = [
+    'X-Tenant-Id',
+    'X-Company-Id', 
+    'X-Empresa-Id',
+    'tenant_id',
+    'company_id',
+  ]
+  // Pega o primeiro resultado de categorias para extrair algum tenant_id se vier
+  const resCat = await fetch(`${base}/financial/v1/categories?type=EXPENSE`, { headers: h })
+  const catHeaders: Record<string, string> = {}
+  resCat.headers.forEach((v, k) => { catHeaders[k] = v })
+  resultados['response_headers_categorias'] = catHeaders
 
   return NextResponse.json(resultados)
 }
