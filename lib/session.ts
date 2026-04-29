@@ -2,13 +2,11 @@ import { getIronSession, SessionOptions } from 'iron-session'
 import { cookies } from 'next/headers'
 
 export interface SessionData {
-  accessToken?:  string
-  refreshToken?: string
-  tokenExpiry?:  string
-  oauthState?:   string
-  empresaNome?:  string
-  appUsuario?:   string
-  appNome?:      string
+  sessionId?:   string   // ID da sessão guardada no Supabase (tokens ficam lá)
+  oauthState?:  string
+  empresaNome?: string
+  appUsuario?:  string
+  appNome?:     string
 }
 
 export const sessionOptions: SessionOptions = {
@@ -21,5 +19,4 @@ export const sessionOptions: SessionOptions = {
 }
 
 export async function getSession() {
-  return getIronSession<SessionData>(await cookies(), sessionOptions)
-}
+  return getIronSession<SessionData>(await cookies(), sessionOptio

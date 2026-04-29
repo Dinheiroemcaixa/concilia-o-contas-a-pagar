@@ -1,23 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { apiPost, renovarToken } from '@/lib/contaazul'
-import { salvarImportacao } from '@/lib/supabase'
+import { salvarImportacao, buscarTokensSessao, salvarTokensSessao } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
 
-  if (!session.accessToken) {
+  if (!session.sessionId) {
     return NextResponse.json({ erro: 'Não autenticado. Faça login primeiro.' }, { status: 401 })
   }
 
-  // Renova token se necessário
-  if (session.tokenExpiry && new Date() >= new Date(new Date(session.tokenExpiry).getTime() - 5 * 60 * 1000)) {
+  let tokens = await buscarTokensSessao(session.sessionId)
+  if (!tokens) {
+    return NextResponse.json({ erro: 'Sessão expirada. Faça login novamente.' }, { status: 401 })
+  }
+
+  // Renova token se necessário (5 min antes de expirar)
+  if (tokens.token_expiry && new Date() >= new Date(new Date(tokens.token_expiry).getTime() - 5 * 60 * 1000)) {
     try {
-      const tokens = await renovarToken(session.refreshToken!)
-      session.accessToken  = tokens.access_token
-      session.refreshToken = tokens.refresh_token || session.refreshToken
-      session.tokenExpiry  = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+      const novosTokens = await renovarToken(tokens.refresh_token!)
+      const novoId = await salvarTokensSessao({
+        access_token:  novosTokens.access_token,
+        refresh_token: novosTokens.refresh_token || tokens.refresh_token,
+        expires_in:    novosTokens.expires_in
+      })
+      session.sessionId = novoId
       await session.save()
+      tokens = await buscarTokensSessao(novoId)
+      if (!tokens) return NextResponse.json({ erro: 'Erro ao renovar sessão.' }, { status: 401 })
     } catch {
       return NextResponse.json({ erro: 'Sessão expirada. Faça login novamente.' }, { status: 401 })
     }
@@ -43,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (conta_financeira_id)    payload.financial_account_id   = conta_financeira_id
     if (conta.documento)        payload.document_number        = conta.documento
 
-    const { data, status } = await apiPost(session.accessToken!, '/financial/v1/payable', payload)
+    const { data, status } = await apiPost(tokens.access_token, '/financial/v1/payable', payload)
 
     resultados.push({
       fornecedor:  conta.fornecedor,
@@ -55,18 +65,4 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const ok    = resultados.filter(r => r.status === 'ok').length
-  const erros = resultados.filter(r => r.status === 'erro').length
-
-  // Salva histórico no Supabase
-  await salvarImportacao({
-    empresa:      contas[0]?.empresa || '',
-    total_contas: contas.length,
-    total_valor:  contas.reduce((s: number, c: any) => s + c.valor, 0),
-    ok,
-    erros,
-    detalhes:     resultados,
-  })
-
-  return NextResponse.json({ total: resultados.length, ok, erros, resultados })
-}
+  const ok    = resultados.filter(r => r

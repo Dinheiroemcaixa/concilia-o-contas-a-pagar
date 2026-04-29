@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { trocarCodigoPorToken } from '@/lib/contaazul'
+import { salvarTokensSessao } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -20,13 +21,16 @@ export async function GET(req: NextRequest) {
 
   try {
     const tokens = await trocarCodigoPorToken(code!)
-    session.accessToken  = tokens.access_token
-    session.refreshToken = tokens.refresh_token
-    session.tokenExpiry  = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-    session.oauthState   = undefined
+
+    // Salva tokens grandes no Supabase, guarda só o ID pequeno no cookie
+    const sessionId = await salvarTokensSessao({
+      access_token:  tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_in:    tokens.expires_in
+    })
+
+    session.sessionId   = sessionId
+    session.oauthState  = undefined
     await session.save()
-    return NextResponse.redirect(new URL('/', req.url))
-  } catch (e: any) {
-    return NextResponse.redirect(new URL(`/?erro=${encodeURIComponent(e.message)}`, req.url))
-  }
-}
+
+    return NextR
