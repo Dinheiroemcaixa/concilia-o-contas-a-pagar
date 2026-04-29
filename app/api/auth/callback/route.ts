@@ -6,21 +6,18 @@ import { salvarTokensSessao } from '@/lib/supabase'
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code  = searchParams.get('code')
-  const state = searchParams.get('state')
   const error = searchParams.get('error')
 
   if (error) {
     return NextResponse.redirect(new URL(`/?erro=${encodeURIComponent('Erro na autenticacao: ' + error)}`, req.url))
   }
 
-  const session = await getSession()
-
-  if (state !== session.oauthState) {
-    return NextResponse.redirect(new URL('/?erro=Estado+OAuth+invalido', req.url))
+  if (!code) {
+    return NextResponse.redirect(new URL('/?erro=Codigo+de+autorizacao+ausente', req.url))
   }
 
   try {
-    const tokens = await trocarCodigoPorToken(code!)
+    const tokens = await trocarCodigoPorToken(code)
 
     const sessionId = await salvarTokensSessao({
       access_token:  tokens.access_token,
@@ -28,6 +25,7 @@ export async function GET(req: NextRequest) {
       expires_in:    tokens.expires_in
     })
 
+    const session = await getSession()
     session.sessionId  = sessionId
     session.oauthState = undefined
     await session.save()
