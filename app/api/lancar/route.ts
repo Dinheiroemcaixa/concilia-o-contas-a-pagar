@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     if (conta_financeira_id)   payload.financial_account_id = conta_financeira_id
     if (conta.documento)       payload.document_number      = conta.documento
 
-    const { data, status } = await apiPost(accessToken, '/financial/v1/payable', payload)
+    const { data, status } = await apiPost(accessToken, '/v1/payables', payload)
     const sucesso = status === 200 || status === 201
     if (!sucesso) {
       console.error(`Erro ContaAzul [${status}] para ${conta.fornecedor}:`, JSON.stringify(data))
