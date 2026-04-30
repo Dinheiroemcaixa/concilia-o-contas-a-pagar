@@ -206,7 +206,7 @@ function TelaAuth(props: TelaAuthProps) {
   )
 }
 
-export function AppDatacar() {
+export function AppConciliacao() {
   const [logado, setLogado] = useState<boolean>(false)
   const [usuarioAtual, setUsuarioAtual] = useState<string>('')
   const [nomeAtual, setNomeAtual] = useState<string>('')
