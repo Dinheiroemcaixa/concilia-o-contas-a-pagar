@@ -550,12 +550,15 @@ export function AppConciliacao() {
                           {e.cnpj ? e.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : '—'}
                         </td>
                         <td className="dc-td">
-                          {conexoes[e.id]
-                            ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '12px' }}>✓ Conectada</span>
-                            : <a href={`/api/auth?empresa_id=${e.id}`} style={{ display: 'inline-block', background: 'var(--accent)', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none' }}>
-                                Conectar ao ContaAzul
-                              </a>
-                          }
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            {conexoes[e.id]
+                              ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '12px' }}>✓ Conectada</span>
+                              : <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '12px' }}>✗ Desconectada</span>
+                            }
+                            <a href={`/api/auth?empresa_id=${e.id}`} style={{ display: 'inline-block', background: conexoes[e.id] ? 'var(--bg2)' : 'var(--accent)', color: conexoes[e.id] ? 'var(--text2)' : 'white', padding: '3px 9px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, textDecoration: 'none', border: '1px solid var(--border)' }}>
+                              {conexoes[e.id] ? '↺ Reconectar' : 'Conectar ao ContaAzul'}
+                            </a>
+                          </div>
                         </td>
                         <td className="dc-td">
                           <button style={{ fontSize: '11px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -627,11 +630,14 @@ export function AppConciliacao() {
                   </select>
                 </div>
                 {empresaLancamento && (
-                  <div style={{ marginTop: '18px' }}>
+                  <div style={{ marginTop: '18px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     {empresaConectada
                       ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '13px' }}>✓ Conectada ao ContaAzul</span>
-                      : <span style={{ color: '#dc2626', fontSize: '13px' }}>⚠ Nao conectada — <a href={`/api/auth?empresa_id=${empresaLancamento}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>Conectar agora</a></span>
+                      : <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '13px' }}>✗ Nao conectada</span>
                     }
+                    <a href={`/api/auth?empresa_id=${empresaLancamento}`} style={{ display: 'inline-block', background: empresaConectada ? 'var(--bg2)' : 'var(--accent)', color: empresaConectada ? 'var(--text2)' : 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none', border: '1px solid var(--border)' }}>
+                      {empresaConectada ? '↺ Reconectar' : 'Conectar agora'}
+                    </a>
                   </div>
                 )}
               </div>
