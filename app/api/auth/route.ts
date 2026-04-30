@@ -1,12 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { CA_AUTH_URL, CA_CLIENT_ID, CA_REDIRECT_URI, CA_SCOPES } from '@/lib/contaazul'
 import crypto from 'crypto'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const empresaId = req.nextUrl.searchParams.get('empresa_id') || ''
   const session = await getSession()
-  const state = crypto.randomBytes(16).toString('hex')
-  session.oauthState = state
+  const nonce = crypto.randomBytes(8).toString('hex')
+  const state = empresaId ? `${nonce}:${empresaId}` : nonce
+  session.oauthState = nonce
   await session.save()
 
   const url = new URL(CA_AUTH_URL)
