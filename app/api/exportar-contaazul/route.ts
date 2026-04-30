@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
     const serialVenc = dateToExcelSerial(c.vencimento)
     const valor = -Math.abs(c.valor)
     const descricao = `${c.fornecedor} - NF ${c.nf}`
-    const obs = c.nf ? `NF ${c.nf}` : ''
+    // Observacoes: NF + documento (parcela)
+    const docInfo = c.documento ? `NF ${c.nf} - Doc ${c.documento}` : (c.nf ? `NF ${c.nf}` : '')
 
     dadosRows.push([
       serialComp,
@@ -67,9 +68,9 @@ export async function POST(req: NextRequest) {
       categoria || '',
       descricao,
       c.fornecedor || '',
-      c.documento || '',
+      '',            // CNPJ/CPF vazio - ContaAzul so aceita CPF/CNPJ validos
       '',
-      obs,
+      docInfo,
     ])
   }
 
