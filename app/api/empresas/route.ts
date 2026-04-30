@@ -5,18 +5,13 @@ import { buscarTokensSessao } from '@/lib/supabase'
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY!
 
-async function rpc(fn: string, params: Record<string, unknown>) {
-  const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SB_KEY,
-      'Authorization': `Bearer ${SB_KEY}`,
-    },
-    body: JSON.stringify(params),
-  })
-  const data = await res.json()
-  return { ok: res.ok, data, status: res.status }
+function sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SB_KEY,
+    'Authorization': `Bearer ${SB_KEY}`,
+    'Prefer': 'return=representation',
+  }
 }
 
 async function autenticado(): Promise<boolean> {
@@ -31,8 +26,12 @@ async function autenticado(): Promise<boolean> {
 
 export async function GET() {
   if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
-  const { ok, data } = await rpc('listar_empresas', {})
-  if (!ok) return NextResponse.json({ erro: data?.message || 'Erro ao buscar empresas' }, { status: 500 })
+  
+  const res = await fetch(`${SB_URL}/rest/v1/empresas_clientes?select=id,nome,cnpj&order=nome`, {
+    headers: sbHeaders(),
+  })
+  const data = await res.json()
+  if (!res.ok) return NextResponse.json({ erro: data?.message || 'Erro ao buscar empresas' }, { status: 500 })
   return NextResponse.json(data || [])
 }
 
@@ -51,8 +50,16 @@ export async function POST(req: NextRequest) {
     .replace(/^-|-$/g, '')
     .toLowerCase()
 
-  const { ok, data } = await rpc('salvar_empresa', { p_cnpj: cnpjLimpo, p_id: id, p_nome: nomeEmpresa })
-  if (!ok) return NextResponse.json({ erro: data?.message || 'Erro ao salvar empresa' }, { status: 500 })
+  const res = await fetch(`${SB_URL}/rest/v1/empresas_clientes`, {
+    method: 'POST',
+    headers: {
+      ...sbHeaders(),
+      'Prefer': 'return=representation,resolution=merge-duplicates',
+    },
+    body: JSON.stringify({ id, nome: nomeEmpresa, cnpj: cnpjLimpo }),
+  })
+  const data = await res.json()
+  if (!res.ok) return NextResponse.json({ erro: data?.message || 'Erro ao salvar empresa' }, { status: 500 })
   const empresa = Array.isArray(data) ? data[0] : data
   return NextResponse.json(empresa)
 }
@@ -60,7 +67,9 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
   const { id } = await req.json()
-  await rpc('remover_empresa', { p_id: id })
+  await fetch(`${SB_URL}/rest/v1/empresas_clientes?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: sbHeaders(),
+  })
   return NextResponse.json({ ok: true })
 }
-// recriated Thu Apr 30 14:28:04 UTC 2026
