@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
+import * as XLSX from 'xlsx'
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
@@ -21,31 +22,50 @@ export async function POST(req: NextRequest) {
     return `${p[2]}/${p[1]}/${p[0]}`
   }
 
-  const linhas: string[] = []
-  linhas.push('Data de Competência;Data de Vencimento;Data de Pagamento;Valor;Categoria;Descrição;Cliente/Fornecedor;CNPJ/CPF Cliente/Fornecedor;Centro de Custo;Observações')
+  // Monta os dados no formato exato do modelo ContaAzul
+  const rows: any[][] = []
+
+  // Cabecalho igual ao modelo original
+  rows.push([
+    'Data de Competência',
+    'Data de Vencimento',
+    'Data de Pagamento',
+    'Valor',
+    'Categoria',
+    'Descrição',
+    'Cliente/Fornecedor',
+    'CNPJ/CPF Cliente/Fornecedor',
+    'Centro de Custo',
+    'Observações'
+  ])
 
   for (const c of contas) {
-    const competencia = fmtDate(c.emissao || c.vencimento)
-    const vencimento  = fmtDate(c.vencimento)
-    const pagamento   = ''
-    const valor       = (-Math.abs(c.valor)).toFixed(2).replace('.', ',')
-    const cat         = (categoria || '').replace(/;/g, ' ')
-    const descricao   = `${c.fornecedor} - NF ${c.nf}`.replace(/;/g, ' ')
-    const fornecedor  = (c.fornecedor || '').replace(/;/g, ' ')
-    const cnpj        = (c.documento || '').replace(/;/g, ' ')
-    const centro      = ''
-    const obs         = c.nf ? `NF ${c.nf}` : ''
-    linhas.push([competencia, vencimento, pagamento, valor, cat, descricao, fornecedor, cnpj, centro, obs].join(';'))
+    rows.push([
+      fmtDate(c.emissao || c.vencimento),  // Data de Competencia
+      fmtDate(c.vencimento),                // Data de Vencimento
+      '',                                   // Data de Pagamento (vazio = nao baixado)
+      -Math.abs(c.valor),                   // Valor negativo = despesa
+      categoria || '',                      // Categoria
+      `${c.fornecedor} - NF ${c.nf}`,      // Descricao
+      c.fornecedor || '',                   // Cliente/Fornecedor
+      c.documento || '',                    // CNPJ/CPF
+      '',                                   // Centro de Custo
+      c.nf ? `NF ${c.nf}` : '',            // Observacoes
+    ])
   }
 
-  const csv = '﻿' + linhas.join('\r\n')
-  const bytes = Buffer.from(csv, 'utf-8')
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados')
 
-  return new NextResponse(bytes, {
+  // Gera no formato XLS (Excel 97-2003) exatamente como o modelo
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xls' })
+
+  return new NextResponse(buf, {
     status: 200,
     headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="contaazul_importacao.csv"`,
+      'Content-Type': 'application/vnd.ms-excel',
+      'Content-Disposition': 'attachment; filename="contaazul_importacao.xls"',
     }
   })
 }
