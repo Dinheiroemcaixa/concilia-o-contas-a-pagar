@@ -342,7 +342,7 @@ export function AppDatacar() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'contaazul_importacao.csv'
+      a.download = 'contaazul_importacao.xls'
       a.click()
       URL.revokeObjectURL(url)
       setUploadMsg({ tipo: 'ok', txt: 'Planilha gerada! Importe-a no ContaAzul em Financeiro > Contas a Pagar > Importar planilha.' })
