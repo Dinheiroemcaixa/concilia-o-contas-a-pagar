@@ -6,7 +6,7 @@ export const CA_REDIRECT_URI  = process.env.CONTAAZUL_REDIRECT_URI!
 
 export const CA_AUTH_URL  = 'https://auth.contaazul.com/login'
 export const CA_TOKEN_URL = 'https://auth.contaazul.com/oauth2/token'
-export const CA_API_BASE  = 'https://api-v2.contaazul.com'
+export const CA_API_BASE  = 'https://api.contaazul.com'
 export const CA_SCOPES    = 'openid profile aws.cognito.signin.user.admin'
 
 function authHeader() {
