@@ -326,6 +326,29 @@ export function AppDatacar() {
     setLancando(false)
   }
 
+  async function exportarPlanilha() {
+    if (selecionadas.size === 0) { return }
+    const payload: Conta[] = []
+    selecionadas.forEach(function (i) { if (contas[i]) { payload.push(contas[i]) } })
+    try {
+      const res = await fetch('/api/exportar-contaazul', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ contas: payload, categoria: categorias.find(function(c) { return c.id === catId })?.name || '' }),
+      })
+      if (!res.ok) { const d = await res.json(); setUploadMsg({ tipo: 'erro', txt: d.erro || 'Erro ao exportar' }); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'contaazul_importacao.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+      setUploadMsg({ tipo: 'ok', txt: 'Planilha gerada! Importe-a no ContaAzul em Financeiro > Contas a Pagar > Importar planilha.' })
+    } catch (e: any) { setUploadMsg({ tipo: 'erro', txt: 'Erro: ' + e.message }) }
+  }
+
   async function handleLogout() {
     await fetch('/api/auth/logout-app', { method: 'POST', credentials: 'include' }).catch(function () {})
     setLogado(false); setUsuarioAtual(''); setNomeAtual('')
@@ -480,13 +503,17 @@ export function AppDatacar() {
                     </label>
                     <span className="dc-info"><strong style={{ color: 'var(--text1)' }}>{selecionadas.size}</strong> de {contas.length} &nbsp;|&nbsp; Total: <strong style={{ color: 'var(--text1)' }}>{fmtMoeda(valorSel)}</strong></span>
                     <div style={{ flex: 1 }} />
+                    <button className="dc-btn-exp" onClick={exportarPlanilha} disabled={selecionadas.size === 0} style={{ opacity: selecionadas.size === 0 ? 0.6 : 1, cursor: selecionadas.size === 0 ? 'not-allowed' : 'pointer', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {iconCheck}
+                      Baixar planilha ContaAzul
+                    </button>
                     {autenticado && (
                       <button className="dc-btn-g" onClick={lancar} disabled={selecionadas.size === 0 || lancando} style={{ opacity: selecionadas.size === 0 || lancando ? 0.6 : 1, cursor: selecionadas.size === 0 || lancando ? 'not-allowed' : 'pointer' }}>
                         {iconCheck}
-                        {lancando ? 'Lancando...' : 'Lancar no ContaAzul'}
+                        {lancando ? 'Lancando...' : 'Lancar via API'}
                       </button>
                     )}
-                    {!autenticado && <button className="dc-btn-d">Faca login no ContaAzul primeiro</button>}
+                    {!autenticado && <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Conecte ao ContaAzul para lancar via API</span>}
                   </div>
                   <div className="dc-tw">
                     <table className="dc-tbl">
