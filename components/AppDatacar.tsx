@@ -232,6 +232,8 @@ export function AppDatacar() {
   const [empresasClientes, setEmpresasClientes] = useState<any[]>([])
   const [empresaSelecionada, setEmpresaSelecionada] = useState<string>('')
   const [novaEmpresaNome, setNovaEmpresaNome] = useState<string>('')
+  const [novaEmpresaCnpj, setNovaEmpresaCnpj] = useState<string>('')
+  const [buscandoCnpj, setBuscandoCnpj] = useState<boolean>(false)
   const [xmlMsg, setXmlMsg] = useState<string>('')
   const [xmlOk, setXmlOk] = useState<boolean>(false)
   const [empMsg, setEmpMsg] = useState<string>('')
@@ -355,12 +357,13 @@ export function AppDatacar() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ nome: novaEmpresaNome }),
+        body: JSON.stringify({ nome: novaEmpresaNome, cnpj: novaEmpresaCnpj }),
       })
       const data = await res.json()
       if (data.erro) { setEmpMsg('Erro: ' + data.erro); return }
       setNovaEmpresaNome('')
-      setEmpMsg('Empresa cadastrada!')
+      setNovaEmpresaCnpj('')
+      setEmpMsg('Empresa cadastrada: ' + data.nome)
       setEmpresaSelecionada(data.id)
       carregarEmpresas()
     } catch (e: any) { setEmpMsg('Erro: ' + e.message) }
@@ -528,20 +531,32 @@ export function AppDatacar() {
             <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
               <div style={{ fontWeight: 600, color: 'var(--text1)', fontSize: '14px', marginBottom: '12px' }}>Cadastrar nova empresa cliente</div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <input className="dc-linp" style={{ width: '280px', marginBottom: 0 }} type="text" placeholder="Nome da empresa (ex: Stock Pneus Barao)" value={novaEmpresaNome} onChange={function(e) { setNovaEmpresaNome(e.target.value) }} onKeyDown={function(e) { if (e.key === 'Enter') { cadastrarEmpresa() } }} />
-                <button className="dc-btn-g" onClick={cadastrarEmpresa}>Cadastrar</button>
+                <div>
+                  <div className="dc-fl">CNPJ (busca automatica)</div>
+                  <input className="dc-linp" style={{ width: '180px', marginBottom: 0 }} type="text" placeholder="00.000.000/0001-00" value={novaEmpresaCnpj} onChange={function(e) { setNovaEmpresaCnpj(e.target.value) }} />
+                </div>
+                <div>
+                  <div className="dc-fl">Nome da empresa</div>
+                  <input className="dc-linp" style={{ width: '240px', marginBottom: 0 }} type="text" placeholder="Preenchido automaticamente" value={novaEmpresaNome} onChange={function(e) { setNovaEmpresaNome(e.target.value) }} onKeyDown={function(e) { if (e.key === 'Enter') { cadastrarEmpresa() } }} />
+                </div>
+                <div style={{ marginTop: '18px' }}>
+                  <button className="dc-btn-g" onClick={cadastrarEmpresa} disabled={buscandoCnpj}>
+                    {buscandoCnpj ? 'Buscando...' : 'Cadastrar'}
+                  </button>
+                </div>
               </div>
               {empMsg !== '' && <div style={{ fontSize: '12px', color: 'var(--success)', marginTop: '6px' }}>{empMsg}</div>}
               {empresasClientes.length > 0 && (
                 <div className="dc-tw" style={{ marginTop: '12px', maxHeight: '180px', overflowY: 'auto' }}>
                   <table className="dc-tbl">
-                    <thead className="dc-thead"><tr><th className="dc-th">Empresa</th><th className="dc-th">ID</th><th className="dc-th">Fornecedores</th><th className="dc-th"></th></tr></thead>
+                    <thead className="dc-thead"><tr><th className="dc-th">Empresa</th><th className="dc-th">Razao Social</th><th className="dc-th">CNPJ</th><th className="dc-th">Fornecedores</th><th className="dc-th"></th></tr></thead>
                     <tbody>
                       {empresasClientes.map(function(e) {
                         return (
                           <tr key={e.id} style={{ background: empresaSelecionada === e.id ? 'rgba(91,94,244,0.06)' : undefined }}>
                             <td className="dc-td" style={{ fontWeight: 600 }}>{e.nome}</td>
-                            <td className="dc-td" style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--text3)' }}>{e.id}</td>
+                            <td className="dc-td" style={{ fontSize: '11px', color: 'var(--text3)' }}>{e.razao_social || '—'}</td>
+                            <td className="dc-td" style={{ fontFamily: 'monospace', fontSize: '11px' }}>{e.cnpj ? e.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : '—'}</td>
                             <td className="dc-td"><button style={{ fontSize: '11px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }} onClick={function() { setEmpresaSelecionada(e.id); carregarFornecedores(e.id) }}>Ver fornecedores</button></td>
                             <td className="dc-td"><button style={{ fontSize: '11px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={function() { removerEmpresa(e.id) }}>Remover</button></td>
                           </tr>
