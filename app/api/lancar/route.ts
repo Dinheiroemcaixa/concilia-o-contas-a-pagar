@@ -6,20 +6,43 @@ import { salvarImportacao, buscarTokensSessao, salvarTokensSessao } from '@/lib/
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY!
 
-async function rpc(fn: string, params: Record<string, unknown>) {
-  const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` },
-    body: JSON.stringify(params),
+async function sbFetch(path: string, opts: RequestInit = {}) {
+  return fetch(`${SB_URL}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${SB_KEY}`,
+      ...(opts.headers || {}),
+    },
   })
-  const data = await res.json()
-  return { ok: res.ok, data }
 }
 
 async function buscarTokenEmpresa(empresaId: string) {
-  const { ok, data } = await rpc('buscar_token_empresa', { p_empresa_id: empresaId })
-  if (!ok || !Array.isArray(data) || data.length === 0) return null
+  const res = await sbFetch(`/rest/v1/rpc/buscar_token_empresa`, {
+    method: 'POST',
+    body: JSON.stringify({ p_empresa_id: empresaId }),
+  })
+  const data = await res.json()
+  if (!res.ok || !Array.isArray(data) || data.length === 0) return null
   return data[0] as { access_token: string; refresh_token: string; token_expiry: string }
+}
+
+async function salvarTokenEmpresa(empresaId: string, tokens: { access_token: string; refresh_token: string; expires_in: number }) {
+  await sbFetch(`/rest/v1/rpc/salvar_token_empresa`, {
+    method: 'POST',
+    body: JSON.stringify({
+      p_access_token:  tokens.access_token,
+      p_empresa_id:    empresaId,
+      p_expires_in:    tokens.expires_in,
+      p_refresh_token: tokens.refresh_token,
+    }),
+  })
+}
+
+function tokenExpirado(expiry: string | null) {
+  if (!expiry) return true
+  return new Date() >= new Date(new Date(expiry).getTime() - 5 * 60 * 1000)
 }
 
 export async function POST(req: NextRequest) {
@@ -33,25 +56,23 @@ export async function POST(req: NextRequest) {
 
   if (!contas?.length) return NextResponse.json({ erro: 'Nenhuma conta selecionada' }, { status: 400 })
 
-  // Busca token: primeiro tenta da empresa específica, depois o token global da sessão
   let accessToken: string | null = null
 
+  // 1. Tenta token específico da empresa
   if (empresa_id) {
     const tokenEmp = await buscarTokenEmpresa(empresa_id)
     if (tokenEmp) {
-      // Renova se necessário
-      if (tokenEmp.token_expiry && new Date() >= new Date(new Date(tokenEmp.token_expiry).getTime() - 5 * 60 * 1000)) {
+      if (tokenExpirado(tokenEmp.token_expiry)) {
         try {
           const novos = await renovarToken(tokenEmp.refresh_token)
-          await rpc('salvar_token_empresa', {
-            p_empresa_id:    empresa_id,
-            p_access_token:  novos.access_token,
-            p_refresh_token: novos.refresh_token || tokenEmp.refresh_token,
-            p_expires_in:    novos.expires_in || 3600,
+          await salvarTokenEmpresa(empresa_id, {
+            access_token:  novos.access_token,
+            refresh_token: novos.refresh_token || tokenEmp.refresh_token,
+            expires_in:    novos.expires_in || 3600,
           })
           accessToken = novos.access_token
-        } catch {
-          return NextResponse.json({ erro: 'Token da empresa expirado. Reconecte ao ContaAzul.' }, { status: 401 })
+        } catch (e: any) {
+          console.error('Erro ao renovar token empresa:', e.message)
         }
       } else {
         accessToken = tokenEmp.access_token
@@ -59,26 +80,35 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fallback: token global da sessão
+  // 2. Fallback: token global da sessão
   if (!accessToken && session.sessionId) {
     let tokens = await buscarTokensSessao(session.sessionId)
-    if (!tokens) return NextResponse.json({ erro: 'Sessao expirada. Faca login novamente.' }, { status: 401 })
-    if (tokens.token_expiry && new Date() >= new Date(new Date(tokens.token_expiry).getTime() - 5 * 60 * 1000)) {
+    if (!tokens) {
+      return NextResponse.json({ erro: 'Sessao expirada. Faca login novamente.' }, { status: 401 })
+    }
+    if (tokenExpirado(tokens.token_expiry)) {
       try {
         const novos = await renovarToken(tokens.refresh_token!)
-        const novoId = await salvarTokensSessao({ access_token: novos.access_token, refresh_token: novos.refresh_token || tokens.refresh_token, expires_in: novos.expires_in })
+        const novoId = await salvarTokensSessao({
+          access_token:  novos.access_token,
+          refresh_token: novos.refresh_token || tokens.refresh_token,
+          expires_in:    novos.expires_in || 3600,
+        })
         session.sessionId = novoId
         await session.save()
         tokens = await buscarTokensSessao(novoId)
         if (!tokens) return NextResponse.json({ erro: 'Erro ao renovar sessao.' }, { status: 401 })
-      } catch {
-        return NextResponse.json({ erro: 'Sessao expirada. Faca login novamente.' }, { status: 401 })
+      } catch (e: any) {
+        console.error('Erro ao renovar token sessao:', e.message)
+        return NextResponse.json({ erro: 'Token expirado. Faca logout e login novamente.' }, { status: 401 })
       }
     }
-    accessToken = tokens.access_token
+    accessToken = tokens!.access_token
   }
 
-  if (!accessToken) return NextResponse.json({ erro: 'Empresa nao conectada ao ContaAzul. Clique em "Conectar" na aba Fornecedores.' }, { status: 401 })
+  if (!accessToken) {
+    return NextResponse.json({ erro: 'Empresa nao conectada ao ContaAzul. Clique em "Conectar" na aba Fornecedores.' }, { status: 401 })
+  }
 
   const resultados = []
   for (const conta of contas) {
@@ -93,11 +123,15 @@ export async function POST(req: NextRequest) {
     if (conta.documento)       payload.document_number      = conta.documento
 
     const { data, status } = await apiPost(accessToken, '/financial/v1/payable', payload)
+    const sucesso = status === 200 || status === 201
+    if (!sucesso) {
+      console.error(`Erro ContaAzul [${status}] para ${conta.fornecedor}:`, JSON.stringify(data))
+    }
     resultados.push({
       fornecedor:  conta.fornecedor,
       nf:          conta.nf,
       valor:       conta.valor,
-      status:      status === 200 || status === 201 ? 'ok' : 'erro',
+      status:      sucesso ? 'ok' : 'erro',
       http_status: status,
       detalhe:     data,
     })
