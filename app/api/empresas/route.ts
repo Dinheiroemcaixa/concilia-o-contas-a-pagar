@@ -63,3 +63,4 @@ export async function DELETE(req: NextRequest) {
   await rpc('remover_empresa', { p_id: id })
   return NextResponse.json({ ok: true })
 }
+// recriated Thu Apr 30 14:28:04 UTC 2026
