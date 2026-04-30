@@ -228,6 +228,11 @@ export function AppDatacar() {
   const [drag, setDrag] = useState<boolean>(false)
   const [historico, setHistorico] = useState<any[]>([])
   const [abaAtiva, setAbaAtiva] = useState<string>('importar')
+  const [fornecedores, setFornecedores] = useState<any[]>([])
+  const [empresaSelecionada, setEmpresaSelecionada] = useState<string>('default')
+  const [xmlMsg, setXmlMsg] = useState<string>('')
+  const [xmlOk, setXmlOk] = useState<boolean>(false)
+  const xmlRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function carregarOpcoes() {
@@ -272,6 +277,7 @@ export function AppDatacar() {
   function handleAba(aba: string) {
     setAbaAtiva(aba)
     if (aba === 'historico') { carregarHistorico() }
+    if (aba === 'fornecedores') { carregarFornecedores() }
   }
 
   async function processarArquivo(file: File) {
@@ -326,27 +332,30 @@ export function AppDatacar() {
     setLancando(false)
   }
 
-  async function exportarPlanilha() {
-    if (selecionadas.size === 0) { return }
-    const payload: Conta[] = []
-    selecionadas.forEach(function (i) { if (contas[i]) { payload.push(contas[i]) } })
+  async function carregarFornecedores(eid?: string) {
     try {
-      const res = await fetch('/api/exportar-contaazul', {
+      const res = await fetch('/api/fornecedores?empresa_id=' + (eid || empresaSelecionada), { credentials: 'include' })
+      const data = await res.json()
+      if (Array.isArray(data)) { setFornecedores(data) }
+    } catch (_) {}
+  }
+
+  async function importarXML(file: File) {
+    setXmlMsg('Lendo arquivo...'); setXmlOk(false)
+    try {
+      const text = await file.text()
+      const res = await fetch('/api/fornecedores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ contas: payload, categoria: categorias.find(function(c) { return c.id === catId })?.name || '' }),
+        body: JSON.stringify({ xmlContent: text, empresa_id: empresaSelecionada }),
       })
-      if (!res.ok) { const d = await res.json(); setUploadMsg({ tipo: 'erro', txt: d.erro || 'Erro ao exportar' }); return }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'contaazul_importacao.xls'
-      a.click()
-      URL.revokeObjectURL(url)
-      setUploadMsg({ tipo: 'ok', txt: 'Planilha gerada! Importe-a no ContaAzul em Financeiro > Contas a Pagar > Importar planilha.' })
-    } catch (e: any) { setUploadMsg({ tipo: 'erro', txt: 'Erro: ' + e.message }) }
+      const data = await res.json()
+      if (data.erro) { setXmlMsg('Erro: ' + data.erro); return }
+      setXmlMsg(data.importados + ' fornecedores importados com sucesso!')
+      setXmlOk(true)
+      carregarFornecedores()
+    } catch (e: any) { setXmlMsg('Erro: ' + e.message) }
   }
 
   async function handleLogout() {
@@ -397,6 +406,7 @@ export function AppDatacar() {
       <div className="dc-tabs">
         <button className={'dc-tab' + (abaAtiva === 'importar' ? ' dc-tab-on' : '')} onClick={function () { handleAba('importar') }}>Importar planilha</button>
         <button className={'dc-tab' + (abaAtiva === 'historico' ? ' dc-tab-on' : '')} onClick={function () { handleAba('historico') }}>Historico</button>
+        <button className={'dc-tab' + (abaAtiva === 'fornecedores' ? ' dc-tab-on' : '')} onClick={function () { handleAba('fornecedores') }}>Fornecedores</button>
       </div>
 
       <div className="dc-content">
@@ -432,6 +442,53 @@ export function AppDatacar() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {abaAtiva === 'fornecedores' && (
+          <div className="dc-card">
+            <div className="dc-ct">Fornecedores do ContaAzul</div>
+            <p style={{ color: 'var(--text2)', fontSize: '13px', marginBottom: '16px' }}>
+              Importe o XML de fornecedores exportado do ContaAzul (Cadastros &gt; Fornecedores &gt; Exportar &gt; XML).
+              O app usara esses dados para normalizar os nomes na planilha de importacao.
+            </p>
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <div className="dc-fl">Empresa (ID)</div>
+                <input className="dc-linp" style={{ width: '220px', marginBottom: 0 }} type="text" placeholder="ex: stock-pneus-barao" value={empresaSelecionada} onChange={function(e) { setEmpresaSelecionada(e.target.value) }} />
+              </div>
+              <div style={{ marginTop: '18px' }}>
+                <button className="dc-btn-g" onClick={function() { if (xmlRef.current) { xmlRef.current.click() } }}>
+                  Importar XML do ContaAzul
+                </button>
+                <input ref={xmlRef} type="file" accept=".xml" style={{ display: 'none' }} onChange={function(e) { if (e.target.files && e.target.files[0]) { importarXML(e.target.files[0]) } }} />
+              </div>
+              <div style={{ marginTop: '18px' }}>
+                <button style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 14px', color: 'var(--text1)', fontSize: '13px', cursor: 'pointer' }} onClick={function() { carregarFornecedores() }}>
+                  Ver lista
+                </button>
+              </div>
+            </div>
+            {xmlMsg !== '' && (
+              <div className="dc-msg" style={{ marginTop: 0, marginBottom: '12px', background: xmlOk ? 'var(--badge-ok)' : 'rgba(220,38,38,0.1)', borderLeftColor: xmlOk ? '#16a34a' : '#dc2626', color: xmlOk ? 'var(--badge-ok-text)' : '#dc2626' }}>
+                {xmlMsg}
+              </div>
+            )}
+            {fornecedores.length > 0 && (
+              <div>
+                <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '8px' }}>{fornecedores.length} fornecedores cadastrados para "{empresaSelecionada}"</div>
+                <div className="dc-tw" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <table className="dc-tbl">
+                    <thead className="dc-thead"><tr><th className="dc-th">Nome no ContaAzul</th><th className="dc-th">CNPJ</th></tr></thead>
+                    <tbody>
+                      {fornecedores.map(function(f, i) {
+                        return (<tr key={i}><td className="dc-td" style={{ fontWeight: 500 }}>{f.nome}</td><td className="dc-td">{f.cnpj || '—'}</td></tr>)
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -503,17 +560,13 @@ export function AppDatacar() {
                     </label>
                     <span className="dc-info"><strong style={{ color: 'var(--text1)' }}>{selecionadas.size}</strong> de {contas.length} &nbsp;|&nbsp; Total: <strong style={{ color: 'var(--text1)' }}>{fmtMoeda(valorSel)}</strong></span>
                     <div style={{ flex: 1 }} />
-                    <button className="dc-btn-exp" onClick={exportarPlanilha} disabled={selecionadas.size === 0} style={{ opacity: selecionadas.size === 0 ? 0.6 : 1, cursor: selecionadas.size === 0 ? 'not-allowed' : 'pointer', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {iconCheck}
-                      Baixar planilha ContaAzul
-                    </button>
                     {autenticado && (
                       <button className="dc-btn-g" onClick={lancar} disabled={selecionadas.size === 0 || lancando} style={{ opacity: selecionadas.size === 0 || lancando ? 0.6 : 1, cursor: selecionadas.size === 0 || lancando ? 'not-allowed' : 'pointer' }}>
                         {iconCheck}
-                        {lancando ? 'Lancando...' : 'Lancar via API'}
+                        {lancando ? 'Lancando...' : 'Lancar no ContaAzul'}
                       </button>
                     )}
-                    {!autenticado && <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Conecte ao ContaAzul para lancar via API</span>}
+                    {!autenticado && <button className="dc-btn-d">Faca login no ContaAzul primeiro</button>}
                   </div>
                   <div className="dc-tw">
                     <table className="dc-tbl">

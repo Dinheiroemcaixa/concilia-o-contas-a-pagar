@@ -67,3 +67,31 @@ export async function buscarHistorico() {
   if (error) return []
   return data
 }
+
+// Busca o nome correto do fornecedor no ContaAzul por similaridade
+export async function normalizarFornecedor(nome: string, empresaId: string = 'default'): Promise<string> {
+  const { data } = await supabase
+    .from('fornecedores')
+    .select('nome')
+    .eq('empresa_id', empresaId)
+
+  if (!data || data.length === 0) return nome
+
+  const nomeUp = nome.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').trim()
+  const palavras = nomeUp.split(/\s+/).filter(p => p.length > 2)
+
+  let melhor = { nome, score: 0 }
+
+  for (const f of data) {
+    const fUp = f.nome.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').trim()
+    // Conta palavras em comum
+    const fPalavras = fUp.split(/\s+/).filter(p => p.length > 2)
+    const comuns = palavras.filter(p => fPalavras.includes(p)).length
+    const score = comuns / Math.max(palavras.length, fPalavras.length)
+    if (score > melhor.score && score >= 0.5) {
+      melhor = { nome: f.nome, score }
+    }
+  }
+
+  return melhor.nome
+}

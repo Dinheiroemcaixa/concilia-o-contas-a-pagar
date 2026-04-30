@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
+import { normalizarFornecedor } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
 
 function dateToExcelSerial(dateStr: string | null): number | null {
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { contas, categoria } = body
+  const { contas, categoria, empresa_id } = body
+  const eid = empresa_id || 'default'
 
   if (!contas?.length) {
     return NextResponse.json({ erro: 'Nenhuma conta selecionada' }, { status: 400 })
@@ -56,18 +58,18 @@ export async function POST(req: NextRequest) {
     const serialComp = dateToExcelSerial(c.emissao || c.vencimento)
     const serialVenc = dateToExcelSerial(c.vencimento)
     const valor = -Math.abs(c.valor)
-    const descricao = `${c.fornecedor} - NF ${c.nf}`
     // Observacoes: NF + documento (parcela)
     const docInfo = c.documento ? `NF ${c.nf} - Doc ${c.documento}` : (c.nf ? `NF ${c.nf}` : '')
 
+    const nomeFornecedor = await normalizarFornecedor(c.fornecedor || '', eid)
     dadosRows.push([
       serialComp,
       serialVenc,
       '',            // Data pagamento vazio = Em Aberto
       valor,
       categoria || '',
-      descricao,
-      c.fornecedor || '',
+      `${nomeFornecedor} - NF ${c.nf}`,
+      nomeFornecedor,
       '',            // CNPJ/CPF vazio - ContaAzul so aceita CPF/CNPJ validos
       '',
       docInfo,
