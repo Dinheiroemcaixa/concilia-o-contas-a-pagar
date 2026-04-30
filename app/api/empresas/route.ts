@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     .replace(/^-|-$/g, '')
     .toLowerCase()
 
-  const { ok, data } = await rpc('salvar_empresa', { p_id: id, p_nome: nomeEmpresa, p_cnpj: cnpjLimpo })
+  const { ok, data } = await rpc('salvar_empresa', { p_cnpj: cnpjLimpo, p_id: id, p_nome: nomeEmpresa })
   if (!ok) return NextResponse.json({ erro: data?.message || 'Erro ao salvar empresa' }, { status: 500 })
   const empresa = Array.isArray(data) ? data[0] : data
   return NextResponse.json(empresa)
