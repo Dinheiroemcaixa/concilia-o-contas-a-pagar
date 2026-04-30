@@ -284,9 +284,13 @@ export function AppConciliacao() {
   }
 
   useEffect(function () {
-    carregarEmpresas()
+    // Primeiro verifica se ja esta logado, DEPOIS carrega empresas
     fetch('/api/auth/me-app', { credentials: 'include' }).then(r => r.json()).then(d => {
-      if (d.logado) { setLogado(true); setUsuarioAtual(d.usuario); setNomeAtual(d.nome || d.usuario) }
+      if (d.logado) {
+        setLogado(true); setUsuarioAtual(d.usuario); setNomeAtual(d.nome || d.usuario)
+        // So carrega empresas DEPOIS de confirmar login
+        carregarEmpresas()
+      }
     }).catch(() => {})
     const params = new URLSearchParams(window.location.search)
     const erro = params.get('erro')
@@ -433,7 +437,7 @@ export function AppConciliacao() {
       <TelaAuth
         isDark={tema === 'dark'}
         toggleTema={toggleTema}
-        onLogin={(u, n) => { setLogado(true); setUsuarioAtual(u); setNomeAtual(n) }}
+        onLogin={(u, n) => { setLogado(true); setUsuarioAtual(u); setNomeAtual(n); carregarEmpresas() }}
       />
     )
   }
