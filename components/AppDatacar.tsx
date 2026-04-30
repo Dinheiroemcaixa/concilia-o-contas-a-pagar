@@ -229,9 +229,12 @@ export function AppDatacar() {
   const [historico, setHistorico] = useState<any[]>([])
   const [abaAtiva, setAbaAtiva] = useState<string>('importar')
   const [fornecedores, setFornecedores] = useState<any[]>([])
-  const [empresaSelecionada, setEmpresaSelecionada] = useState<string>('default')
+  const [empresasClientes, setEmpresasClientes] = useState<any[]>([])
+  const [empresaSelecionada, setEmpresaSelecionada] = useState<string>('')
+  const [novaEmpresaNome, setNovaEmpresaNome] = useState<string>('')
   const [xmlMsg, setXmlMsg] = useState<string>('')
   const [xmlOk, setXmlOk] = useState<boolean>(false)
+  const [empMsg, setEmpMsg] = useState<string>('')
   const xmlRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -255,6 +258,7 @@ export function AppDatacar() {
   }
 
   useEffect(function () {
+    carregarEmpresas()
     fetch('/api/auth/me-app', { credentials: 'include' }).then(function (r) { return r.json() }).then(function (d) {
       if (d.logado) { setLogado(true); setUsuarioAtual(d.usuario); setNomeAtual(d.nome || d.usuario) }
     }).catch(function () {})
@@ -277,7 +281,7 @@ export function AppDatacar() {
   function handleAba(aba: string) {
     setAbaAtiva(aba)
     if (aba === 'historico') { carregarHistorico() }
-    if (aba === 'fornecedores') { carregarFornecedores() }
+    if (aba === 'fornecedores') { carregarEmpresas(); carregarFornecedores() }
   }
 
   async function processarArquivo(file: File) {
@@ -330,6 +334,48 @@ export function AppDatacar() {
       setResultados(data.resultados); setResumo({ ok: data.ok, erros: data.erros })
     } catch (e: any) { setUploadMsg({ tipo: 'erro', txt: 'Erro: ' + e.message }) }
     setLancando(false)
+  }
+
+  async function carregarEmpresas() {
+    try {
+      const res = await fetch('/api/empresas', { credentials: 'include' })
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setEmpresasClientes(data)
+        if (data.length > 0 && !empresaSelecionada) { setEmpresaSelecionada(data[0].id) }
+      }
+    } catch (_) {}
+  }
+
+  async function cadastrarEmpresa() {
+    if (!novaEmpresaNome.trim()) return
+    setEmpMsg('')
+    try {
+      const res = await fetch('/api/empresas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ nome: novaEmpresaNome }),
+      })
+      const data = await res.json()
+      if (data.erro) { setEmpMsg('Erro: ' + data.erro); return }
+      setNovaEmpresaNome('')
+      setEmpMsg('Empresa cadastrada!')
+      setEmpresaSelecionada(data.id)
+      carregarEmpresas()
+    } catch (e: any) { setEmpMsg('Erro: ' + e.message) }
+  }
+
+  async function removerEmpresa(id: string) {
+    if (!confirm('Remover empresa e todos os fornecedores?')) return
+    await fetch('/api/empresas', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id }),
+    })
+    if (empresaSelecionada === id) { setEmpresaSelecionada('') }
+    carregarEmpresas()
   }
 
   async function carregarFornecedores(eid?: string) {
@@ -456,8 +502,11 @@ export function AppDatacar() {
             </p>
             <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <div>
-                <div className="dc-fl">Empresa (ID)</div>
-                <input className="dc-linp" style={{ width: '220px', marginBottom: 0 }} type="text" placeholder="ex: stock-pneus-barao" value={empresaSelecionada} onChange={function(e) { setEmpresaSelecionada(e.target.value) }} />
+                <div className="dc-fl">Empresa cliente</div>
+                <select className="dc-sel" style={{ width: '260px' }} value={empresaSelecionada} onChange={function(e) { setEmpresaSelecionada(e.target.value); carregarFornecedores(e.target.value) }}>
+                  <option value="">Selecione uma empresa</option>
+                  {empresasClientes.map(function(e) { return <option key={e.id} value={e.id}>{e.nome}</option> })}
+                </select>
               </div>
               <div style={{ marginTop: '18px' }}>
                 <button className="dc-btn-g" onClick={function() { if (xmlRef.current) { xmlRef.current.click() } }}>
@@ -476,6 +525,34 @@ export function AppDatacar() {
                 {xmlMsg}
               </div>
             )}
+            <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+              <div style={{ fontWeight: 600, color: 'var(--text1)', fontSize: '14px', marginBottom: '12px' }}>Cadastrar nova empresa cliente</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input className="dc-linp" style={{ width: '280px', marginBottom: 0 }} type="text" placeholder="Nome da empresa (ex: Stock Pneus Barao)" value={novaEmpresaNome} onChange={function(e) { setNovaEmpresaNome(e.target.value) }} onKeyDown={function(e) { if (e.key === 'Enter') { cadastrarEmpresa() } }} />
+                <button className="dc-btn-g" onClick={cadastrarEmpresa}>Cadastrar</button>
+              </div>
+              {empMsg !== '' && <div style={{ fontSize: '12px', color: 'var(--success)', marginTop: '6px' }}>{empMsg}</div>}
+              {empresasClientes.length > 0 && (
+                <div className="dc-tw" style={{ marginTop: '12px', maxHeight: '180px', overflowY: 'auto' }}>
+                  <table className="dc-tbl">
+                    <thead className="dc-thead"><tr><th className="dc-th">Empresa</th><th className="dc-th">ID</th><th className="dc-th">Fornecedores</th><th className="dc-th"></th></tr></thead>
+                    <tbody>
+                      {empresasClientes.map(function(e) {
+                        return (
+                          <tr key={e.id} style={{ background: empresaSelecionada === e.id ? 'rgba(91,94,244,0.06)' : undefined }}>
+                            <td className="dc-td" style={{ fontWeight: 600 }}>{e.nome}</td>
+                            <td className="dc-td" style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--text3)' }}>{e.id}</td>
+                            <td className="dc-td"><button style={{ fontSize: '11px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }} onClick={function() { setEmpresaSelecionada(e.id); carregarFornecedores(e.id) }}>Ver fornecedores</button></td>
+                            <td className="dc-td"><button style={{ fontSize: '11px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={function() { removerEmpresa(e.id) }}>Remover</button></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             {fornecedores.length > 0 && (
               <div>
                 <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '8px' }}>{fornecedores.length} fornecedores cadastrados para "{empresaSelecionada}"</div>
