@@ -2,17 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { buscarTokensSessao } from '@/lib/supabase'
 
-function supabaseHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': process.env.SUPABASE_SERVICE_KEY!,
-    'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY!}`,
-    'Prefer': 'return=representation',
-  }
-}
+const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY!
 
-function supabaseUrl(path: string) {
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`
+async function rpc(fn: string, params: Record<string, unknown>) {
+  const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${SB_KEY}`,
+    },
+    body: JSON.stringify(params),
+  })
+  const data = await res.json()
+  return { ok: res.ok, data, status: res.status }
 }
 
 async function autenticado(): Promise<boolean> {
@@ -28,13 +32,8 @@ async function autenticado(): Promise<boolean> {
 export async function GET(req: NextRequest) {
   if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
   const empresaId = req.nextUrl.searchParams.get('empresa_id') || 'default'
-
-  const res = await fetch(
-    supabaseUrl(`fornecedores?empresa_id=eq.${encodeURIComponent(empresaId)}&select=nome,cnpj&order=nome`),
-    { headers: supabaseHeaders() }
-  )
-  const data = await res.json()
-  if (!res.ok) return NextResponse.json({ erro: data?.message || 'Erro ao buscar fornecedores' }, { status: 500 })
+  const { ok, data } = await rpc('listar_fornecedores', { p_empresa_id: empresaId })
+  if (!ok) return NextResponse.json({ erro: data?.message || 'Erro ao buscar fornecedores' }, { status: 500 })
   return NextResponse.json(data || [])
 }
 
@@ -57,19 +56,7 @@ export async function POST(req: NextRequest) {
 
   if (!fornecedores.length) return NextResponse.json({ erro: 'Nenhum fornecedor encontrado no XML' }, { status: 400 })
 
-  // Deleta fornecedores antigos
-  await fetch(
-    supabaseUrl(`fornecedores?empresa_id=eq.${encodeURIComponent(eid)}`),
-    { method: 'DELETE', headers: supabaseHeaders() }
-  )
-
-  // Insere novos
-  const rows = fornecedores.map(f => ({ empresa_id: eid, nome: f.nome, cnpj: f.cnpj }))
-  const res = await fetch(
-    supabaseUrl('fornecedores'),
-    { method: 'POST', headers: supabaseHeaders(), body: JSON.stringify(rows) }
-  )
-  const data = await res.json()
-  if (!res.ok) return NextResponse.json({ erro: data?.message || 'Erro ao inserir fornecedores' }, { status: 500 })
+  const { ok, data } = await rpc('salvar_fornecedores', { p_empresa_id: eid, p_fornecedores: fornecedores })
+  if (!ok) return NextResponse.json({ erro: data?.message || 'Erro ao salvar fornecedores' }, { status: 500 })
   return NextResponse.json({ importados: fornecedores.length })
 }
