@@ -6,13 +6,34 @@ import { salvarTokensSessao } from '@/lib/supabase'
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY!
 
-async function rpc(fn: string, params: Record<string, unknown>) {
-  const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+function sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SB_KEY,
+    'Authorization': `Bearer ${SB_KEY}`,
+  }
+}
+
+async function salvarTokenEmpresaDireto(empresaId: string, accessToken: string, refreshToken: string, expiresIn: number) {
+  const expiryDate = new Date(Date.now() + expiresIn * 1000).toISOString()
+  const res = await fetch(`${SB_URL}/rest/v1/tokens_empresa`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` },
-    body: JSON.stringify(params),
+    headers: {
+      ...sbHeaders(),
+      'Prefer': 'return=minimal,resolution=merge-duplicates',
+    },
+    body: JSON.stringify({
+      empresa_id:    empresaId,
+      access_token:  accessToken,
+      refresh_token: refreshToken,
+      token_expiry:  expiryDate,
+    }),
   })
-  return res
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    console.error('[callback] erro ao salvar token empresa:', res.status, err)
+  }
+  return res.ok
 }
 
 export async function GET(req: NextRequest) {
@@ -31,12 +52,12 @@ export async function GET(req: NextRequest) {
     const tokens = await trocarCodigoPorToken(code)
 
     if (empresaId) {
-      await rpc('salvar_token_empresa', {
-        p_empresa_id:    empresaId,
-        p_access_token:  tokens.access_token,
-        p_refresh_token: tokens.refresh_token || '',
-        p_expires_in:    tokens.expires_in || 3600,
-      })
+      await salvarTokenEmpresaDireto(
+        empresaId,
+        tokens.access_token,
+        tokens.refresh_token || '',
+        tokens.expires_in || 3600,
+      )
     }
 
     const session = await getSession()
