@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import * as XLSX from 'xlsx'
 
+function dateToExcelSerial(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  try {
+    let d: Date
+    if (dateStr.includes('-')) {
+      const [y, m, day] = dateStr.split('-').map(Number)
+      d = new Date(y, m - 1, day)
+    } else if (dateStr.includes('/')) {
+      const [day, m, y] = dateStr.split('/').map(Number)
+      d = new Date(y, m - 1, day)
+    } else return null
+    // Serial do Excel: dias desde 30/12/1899 (compativel com Excel/ContaAzul)
+    const base = new Date(1899, 11, 30)
+    const diff = Math.round((d.getTime() - base.getTime()) / 86400000)
+    return diff
+  } catch { return null }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session.appUsuario) {
@@ -15,18 +33,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ erro: 'Nenhuma conta selecionada' }, { status: 400 })
   }
 
-  function fmtDate(s: string | null): string {
-    if (!s) return ''
-    const p = s.split('-')
-    if (p.length !== 3) return s
-    return `${p[2]}/${p[1]}/${p[0]}`
-  }
+  const wb = XLSX.utils.book_new()
 
-  // Monta os dados no formato exato do modelo ContaAzul
-  const rows: any[][] = []
+  // === Aba Dados ===
+  const dadosRows: any[][] = []
 
-  // Cabecalho igual ao modelo original
-  rows.push([
+  // Cabecalho identico ao modelo
+  dadosRows.push([
     'Data de Competência',
     'Data de Vencimento',
     'Data de Pagamento',
@@ -40,25 +53,58 @@ export async function POST(req: NextRequest) {
   ])
 
   for (const c of contas) {
-    rows.push([
-      fmtDate(c.emissao || c.vencimento),  // Data de Competencia
-      fmtDate(c.vencimento),                // Data de Vencimento
-      '',                                   // Data de Pagamento (vazio = nao baixado)
-      -Math.abs(c.valor),                   // Valor negativo = despesa
-      categoria || '',                      // Categoria
-      `${c.fornecedor} - NF ${c.nf}`,      // Descricao
-      c.fornecedor || '',                   // Cliente/Fornecedor
-      c.documento || '',                    // CNPJ/CPF
-      '',                                   // Centro de Custo
-      c.nf ? `NF ${c.nf}` : '',            // Observacoes
+    const serialComp = dateToExcelSerial(c.emissao || c.vencimento)
+    const serialVenc = dateToExcelSerial(c.vencimento)
+    const valor = -Math.abs(c.valor)
+    const descricao = `${c.fornecedor} - NF ${c.nf}`
+    const obs = c.nf ? `NF ${c.nf}` : ''
+
+    dadosRows.push([
+      serialComp,
+      serialVenc,
+      '',            // Data pagamento vazio = Em Aberto
+      valor,
+      categoria || '',
+      descricao,
+      c.fornecedor || '',
+      c.documento || '',
+      '',
+      obs,
     ])
   }
 
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-  XLSX.utils.book_append_sheet(wb, ws, 'Dados')
+  const wsDados = XLSX.utils.aoa_to_sheet(dadosRows)
 
-  // Gera no formato XLS (Excel 97-2003) exatamente como o modelo
+  // Aplica formato de data nas colunas 0, 1 (A e B) para todas as linhas de dados
+  const dateFormat = 'DD/MM/YYYY'
+  for (let i = 1; i < dadosRows.length; i++) {
+    const cellA = XLSX.utils.encode_cell({ r: i, c: 0 })
+    const cellB = XLSX.utils.encode_cell({ r: i, c: 1 })
+    if (wsDados[cellA] && dadosRows[i][0]) {
+      wsDados[cellA].t = 'n'
+      wsDados[cellA].z = dateFormat
+    }
+    if (wsDados[cellB] && dadosRows[i][1]) {
+      wsDados[cellB].t = 'n'
+      wsDados[cellB].z = dateFormat
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, wsDados, 'Dados')
+
+  // === Aba Orientações (igual ao modelo) ===
+  const orientacoesRows = [
+    ['Orientações de preenchimento da planilha:'],
+    ['* A data de pagamento precisa ser igual ou inferior a data de hoje, caso a mesma seja superior ao dia de hoje o lançamento será importado com o status: "Em Aberto".'],
+    ['* Não utilizar caracteres especiais, como por exemplo: \' " ! @ #  %  ¨  &  *  (  )  ª  º  §  + _  - ? ° [ { } ] : ;'],
+    ['* Cole as informações planilha utilizando a função "Colar Especial > Colar Valores" para não perder a formatação padrão das células;'],
+    ['* Verificar se não ficou espaços entre os dados informados, principalmente quando as informações são coladas;'],
+    ['* As células não podem conter fórmulas;'],
+  ]
+  const wsOrientacoes = XLSX.utils.aoa_to_sheet(orientacoesRows)
+  XLSX.utils.book_append_sheet(wb, wsOrientacoes, 'Orientações')
+
+  // Gera XLS (Excel 97-2003) - formato OLE2 identico ao modelo
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xls' })
 
   return new NextResponse(buf, {
