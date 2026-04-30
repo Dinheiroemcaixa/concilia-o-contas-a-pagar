@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
-import { createClient } from '@supabase/supabase-js'
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { db: { schema: 'public' } }
-  )
+function supabaseHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': process.env.SUPABASE_SERVICE_KEY!,
+    'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY!}`,
+    'Prefer': 'return=representation',
+  }
+}
+
+function supabaseUrl(path: string) {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`
 }
 
 export async function GET(req: NextRequest) {
   const session = await getSession()
   if (!session.appUsuario) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
   const empresaId = req.nextUrl.searchParams.get('empresa_id') || 'default'
-  const sb = getSupabase()
-  const { data, error } = await sb.from('fornecedores').select('nome, cnpj').eq('empresa_id', empresaId).order('nome')
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 })
+
+  const res = await fetch(
+    supabaseUrl(`fornecedores?empresa_id=eq.${encodeURIComponent(empresaId)}&select=nome,cnpj&order=nome`),
+    { headers: supabaseHeaders() }
+  )
+  const data = await res.json()
+  if (!res.ok) return NextResponse.json({ erro: data?.message || 'Erro ao buscar fornecedores' }, { status: 500 })
   return NextResponse.json(data || [])
 }
 
@@ -40,10 +48,19 @@ export async function POST(req: NextRequest) {
 
   if (!fornecedores.length) return NextResponse.json({ erro: 'Nenhum fornecedor encontrado no XML' }, { status: 400 })
 
-  const sb = getSupabase()
-  await sb.from('fornecedores').delete().eq('empresa_id', eid)
+  // Deleta fornecedores antigos da empresa
+  await fetch(
+    supabaseUrl(`fornecedores?empresa_id=eq.${encodeURIComponent(eid)}`),
+    { method: 'DELETE', headers: supabaseHeaders() }
+  )
+
+  // Insere novos
   const rows = fornecedores.map(f => ({ empresa_id: eid, nome: f.nome, cnpj: f.cnpj }))
-  const { error } = await sb.from('fornecedores').insert(rows)
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 })
+  const res = await fetch(
+    supabaseUrl('fornecedores'),
+    { method: 'POST', headers: supabaseHeaders(), body: JSON.stringify(rows) }
+  )
+  const data = await res.json()
+  if (!res.ok) return NextResponse.json({ erro: data?.message || 'Erro ao inserir fornecedores' }, { status: 500 })
   return NextResponse.json({ importados: fornecedores.length })
 }
