@@ -78,14 +78,14 @@ export async function normalizarFornecedor(nome: string, empresaId: string = 'de
   if (!data || data.length === 0) return nome
 
   const nomeUp = nome.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').trim()
-  const palavras = nomeUp.split(/\s+/).filter(p => p.length > 2)
+  const palavras = nomeUp.split(/\s+/).filter((p: string) => p.length > 2)
 
   let melhor = { nome, score: 0 }
 
   for (const f of data) {
     const fUp = f.nome.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').trim()
     // Conta palavras em comum
-    const fPalavras = fUp.split(/\s+/).filter(p => p.length > 2)
+    const fPalavras = fUp.split(/\s+/).filter((p: string) => p.length > 2)
     const comuns = palavras.filter(p => fPalavras.includes(p)).length
     const score = comuns / Math.max(palavras.length, fPalavras.length)
     if (score > melhor.score && score >= 0.5) {
