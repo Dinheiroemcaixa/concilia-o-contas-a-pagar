@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
+import { buscarTokensSessao } from '@/lib/supabase'
 
 function supabaseHeaders() {
   return {
@@ -14,9 +15,18 @@ function supabaseUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`
 }
 
-export async function GET(req: NextRequest) {
+async function autenticado(): Promise<boolean> {
   const session = await getSession()
-  if (!session.appUsuario) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
+  if (session.appUsuario) return true
+  if (session.sessionId) {
+    const tokens = await buscarTokensSessao(session.sessionId)
+    return tokens !== null
+  }
+  return false
+}
+
+export async function GET(req: NextRequest) {
+  if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
   const empresaId = req.nextUrl.searchParams.get('empresa_id') || 'default'
 
   const res = await fetch(
@@ -29,8 +39,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession()
-  if (!session.appUsuario) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
+  if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
   const { xmlContent, empresa_id } = await req.json()
   const eid = empresa_id || 'default'
   if (!xmlContent) return NextResponse.json({ erro: 'XML nao fornecido' }, { status: 400 })
@@ -48,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   if (!fornecedores.length) return NextResponse.json({ erro: 'Nenhum fornecedor encontrado no XML' }, { status: 400 })
 
-  // Deleta fornecedores antigos da empresa
+  // Deleta fornecedores antigos
   await fetch(
     supabaseUrl(`fornecedores?empresa_id=eq.${encodeURIComponent(eid)}`),
     { method: 'DELETE', headers: supabaseHeaders() }

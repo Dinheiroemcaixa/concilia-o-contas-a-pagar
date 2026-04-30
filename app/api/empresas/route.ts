@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
+import { buscarTokensSessao } from '@/lib/supabase'
 
-// Usa fetch direto na API REST do Supabase para evitar problema de schema cache do PostgREST
 function supabaseHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -15,10 +15,20 @@ function supabaseUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`
 }
 
+// Verifica se o usuario esta autenticado (por login interno OU por ContaAzul OAuth)
+async function autenticado(): Promise<boolean> {
+  const session = await getSession()
+  if (session.appUsuario) return true
+  if (session.sessionId) {
+    const tokens = await buscarTokensSessao(session.sessionId)
+    return tokens !== null
+  }
+  return false
+}
+
 // GET - lista empresas
 export async function GET() {
-  const session = await getSession()
-  if (!session.appUsuario) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
+  if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
 
   const res = await fetch(
     supabaseUrl('empresas_clientes?select=id,nome,cnpj,razao_social,nome_fantasia&order=nome'),
@@ -29,10 +39,9 @@ export async function GET() {
   return NextResponse.json(data || [])
 }
 
-// POST - cadastra empresa (manual, sem busca CNPJ)
+// POST - cadastra empresa (manual, so nome e CNPJ)
 export async function POST(req: NextRequest) {
-  const session = await getSession()
-  if (!session.appUsuario) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
+  if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
 
   const { nome, cnpj } = await req.json()
   const nomeEmpresa = nome?.trim() || ''
@@ -49,11 +58,7 @@ export async function POST(req: NextRequest) {
     .replace(/^-|-$/g, '')
     .toLowerCase()
 
-  const body = {
-    id,
-    nome: nomeEmpresa,
-    cnpj: cnpjLimpo || null,
-  }
+  const body = { id, nome: nomeEmpresa, cnpj: cnpjLimpo || null }
 
   const res = await fetch(
     supabaseUrl('empresas_clientes'),
@@ -71,20 +76,16 @@ export async function POST(req: NextRequest) {
 
 // DELETE - remove empresa e seus fornecedores
 export async function DELETE(req: NextRequest) {
-  const session = await getSession()
-  if (!session.appUsuario) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
+  if (!(await autenticado())) return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
   const { id } = await req.json()
 
-  // Deleta fornecedores da empresa
   await fetch(
     supabaseUrl(`fornecedores?empresa_id=eq.${encodeURIComponent(id)}`),
     { method: 'DELETE', headers: supabaseHeaders() }
   )
-  // Deleta empresa
   await fetch(
     supabaseUrl(`empresas_clientes?id=eq.${encodeURIComponent(id)}`),
     { method: 'DELETE', headers: supabaseHeaders() }
   )
   return NextResponse.json({ ok: true })
 }
-// redeploy Thu Apr 30 14:03:53 UTC 2026
